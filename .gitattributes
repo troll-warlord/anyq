@@ -1,0 +1,45 @@
+# Force all text files to LF in the repository.
+# This prevents gofmt/golangci-lint failures on Linux CI
+# when developers commit from Windows (which defaults to CRLF).
+
+# Default: auto-detect text files and normalise to LF.
+* text=auto eol=lf
+
+# Go source — always LF, always treated as text.
+*.go     text eol=lf
+go.mod   text eol=lf
+go.sum   text eol=lf
+
+# Shell scripts — must be LF or they won't execute on Linux/macOS.
+*.sh     text eol=lf
+
+# YAML / TOML / JSON config files — LF.
+*.yml    text eol=lf
+*.yaml   text eol=lf
+*.toml   text eol=lf
+*.json   text eol=lf
+
+# Markdown / plain text — LF.
+*.md     text eol=lf
+*.txt    text eol=lf
+
+# Docker / CI config — LF.
+Dockerfile    text eol=lf
+Makefile      text eol=lf
+
+# Windows-specific files that genuinely need CRLF.
+*.bat    text eol=crlf
+*.cmd    text eol=crlf
+*.ps1   text eol=crlf
+
+# True binary files — no line-ending conversion ever.
+*.exe    binary
+*.dll    binary
+*.so     binary
+*.png    binary
+*.jpg    binary
+*.gif    binary
+*.ico    binary
+*.zip    binary
+*.tar    binary
+*.gz     binary
