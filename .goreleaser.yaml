@@ -1,0 +1,133 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: anyq
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: anyq
+    main: ./main.go
+    binary: anyq
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w
+      - -X github.com/troll-warlord/anyq/cmd.Version={{.Version}}
+      - -X github.com/troll-warlord/anyq/cmd.Commit={{.Commit}}
+      - -X github.com/troll-warlord/anyq/cmd.Date={{.Date}}
+    flags:
+      - -trimpath
+
+archives:
+  - id: anyq-archive
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: "checksums.txt"
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: "🚀 New Features"
+      regexp: "(?i)^feat"
+      order: 0
+    - title: "🐛 Bug Fixes"
+      regexp: "(?i)^fix"
+      order: 1
+    - title: "⚡ Performance"
+      regexp: "(?i)^perf"
+      order: 2
+    - title: "🔒 Security"
+      regexp: "(?i)^sec"
+      order: 3
+    - title: "📝 Other Changes"
+      order: 999
+
+release:
+  github:
+    owner: troll-warlord
+    name: anyq
+  name_template: "{{.ProjectName}} v{{.Version}}"
+  draft: false
+  prerelease: auto
+  footer: |
+    ## Installation
+
+    ### curl (Linux/macOS)
+    ```bash
+    curl -sSfL https://raw.githubusercontent.com/troll-warlord/anyq/main/install.sh | sh
+    ```
+
+    ### go install
+    ```bash
+    go install github.com/troll-warlord/anyq@latest
+    ```
+
+brews:
+  - name: anyq
+    repository:
+      owner: troll-warlord
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/troll-warlord/anyq"
+    description: "Unified jq-syntax query tool for JSON, YAML, and TOML"
+    license: "MIT"
+    install: |
+      bin.install "anyq"
+    test: |
+      system "#{bin}/anyq", "--version"
+
+dockers:
+  - image_templates:
+      - "ghcr.io/troll-warlord/anyq:{{ .Tag }}-amd64"
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/amd64"
+    goarch: amd64
+  - image_templates:
+      - "ghcr.io/troll-warlord/anyq:{{ .Tag }}-arm64"
+    dockerfile: Dockerfile
+    use: buildx
+    build_flag_templates:
+      - "--platform=linux/arm64"
+    goarch: arm64
+
+docker_manifests:
+  - name_template: "ghcr.io/troll-warlord/anyq:{{ .Tag }}"
+    image_templates:
+      - "ghcr.io/troll-warlord/anyq:{{ .Tag }}-amd64"
+      - "ghcr.io/troll-warlord/anyq:{{ .Tag }}-arm64"
+  - name_template: "ghcr.io/troll-warlord/anyq:latest"
+    image_templates:
+      - "ghcr.io/troll-warlord/anyq:{{ .Tag }}-amd64"
+      - "ghcr.io/troll-warlord/anyq:{{ .Tag }}-arm64"
