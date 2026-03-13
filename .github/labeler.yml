@@ -1,0 +1,50 @@
+enhancement:
+  - head-branch: ["^feat/", "^feature/"]
+  - title:
+      - head: '(?i)^feat(\(.+\))?[!:]'
+
+bug:
+  - head-branch: ["^fix/", "^bugfix/", "^hotfix/"]
+  - title:
+      - head: '(?i)^fix(\(.+\))?[!:]'
+
+performance:
+  - head-branch: ["^perf/"]
+  - title:
+      - head: '(?i)^perf(\(.+\))?[!:]'
+
+security:
+  - head-branch: ["^sec/", "^security/"]
+  - title:
+      - head: '(?i)^sec(\(.+\))?[!:]'
+
+documentation:
+  - head-branch: ["^docs?/"]
+  - title:
+      - head: '(?i)^docs?(\(.+\))?[!:]'
+  - changed-files:
+      - any-glob-to-any-file: ["**/*.md", "docs/**"]
+
+chore:
+  - head-branch: ["^chore/"]
+  - title:
+      - head: '(?i)^chore(\(.+\))?[!:]'
+
+ci:
+  - head-branch: ["^ci/"]
+  - title:
+      - head: '(?i)^ci(\(.+\))?[!:]'
+  - changed-files:
+      - any-glob-to-any-file: [".github/**"]
+
+dependencies:
+  - head-branch: ["^(build|deps)/"]
+  - title:
+      - head: '(?i)^build(\(.+\))?[!:]'
+  - changed-files:
+      - any-glob-to-any-file: ["go.mod", "go.sum"]
+
+refactor:
+  - head-branch: ["^refactor/"]
+  - title:
+      - head: '(?i)^refactor(\(.+\))?[!:]'
