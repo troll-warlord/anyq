@@ -1,25 +1,29 @@
 # golangci-lint configuration
 # Docs: https://golangci-lint.run/usage/configuration/
 
+version: "2"
+
 linters:
   enable:
     - errcheck       # unchecked errors
-    - gosimple       # simplification suggestions
     - govet          # go vet checks
     - ineffassign    # ineffectual assignments
-    - staticcheck    # static analysis (SA*, S*, QF*)
+    - staticcheck    # static analysis (SA*, S*, QF*, gosimple)
     - unused         # unused code
-    - gofmt          # formatting
-    - goimports      # import ordering
     - misspell       # spelling mistakes in comments/strings
     - bodyclose      # HTTP response body not closed
     - noctx          # HTTP requests without context
     - gosec          # security checks
 
-linters-settings:
-  gosec:
-    excludes:
-      - G304  # file path from variable — expected for a CLI tool that reads user-specified files
+  settings:
+    gosec:
+      excludes:
+        - G304  # file path from variable — expected for a CLI tool that reads user-specified files
+
+formatters:
+  enable:
+    - gofmt          # formatting
+    - goimports      # import ordering
 
 issues:
   exclude-rules:
