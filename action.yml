@@ -1,0 +1,72 @@
+name: anyq
+description: "Query JSON, YAML, and TOML files with full jq expression syntax"
+author: "troll-warlord"
+branding:
+  icon: "filter"
+  color: "blue"
+
+inputs:
+  expression:
+    description: "jq expression to evaluate (e.g. '.database.host')"
+    required: true
+  file:
+    description: "Path to the input file (JSON, YAML, or TOML). Omit to use stdin."
+    required: false
+    default: ""
+  output-format:
+    description: "Output format: json | yaml | toml. Defaults to the input format."
+    required: false
+    default: ""
+  raw-output:
+    description: "Print strings without JSON quotes (equivalent to jq -r)"
+    required: false
+    default: "false"
+  pretty:
+    description: "Pretty-print JSON output"
+    required: false
+    default: "true"
+
+outputs:
+  result:
+    description: "The query result as a string"
+    value: ${{ steps.run-anyq.outputs.result }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install anyq
+      shell: bash
+      run: |
+        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+        ARCH=$(uname -m)
+        case "$ARCH" in
+          x86_64)  ARCH="amd64" ;;
+          aarch64) ARCH="arm64" ;;
+        esac
+        VERSION=$(curl -sSf https://api.github.com/repos/troll-warlord/anyq/releases/latest \
+                    | grep '"tag_name"' | sed 's/.*"v\([^"]*\)".*/\1/')
+        URL="https://github.com/troll-warlord/anyq/releases/download/v${VERSION}/anyq_${VERSION}_${OS}_${ARCH}.tar.gz"
+        curl -sSfL "$URL" | tar -xz anyq
+        chmod +x anyq
+        sudo mv anyq /usr/local/bin/anyq
+
+    - name: Run anyq
+      id: run-anyq
+      shell: bash
+      run: |
+        EXTRA_FLAGS=""
+        [ "${{ inputs.raw-output }}" = "true" ] && EXTRA_FLAGS="$EXTRA_FLAGS -r"
+        [ "${{ inputs.pretty }}" = "true" ]     && EXTRA_FLAGS="$EXTRA_FLAGS --pretty"
+        [ -n "${{ inputs.output-format }}" ]    && EXTRA_FLAGS="$EXTRA_FLAGS -o ${{ inputs.output-format }}"
+
+        if [ -n "${{ inputs.file }}" ]; then
+          RESULT=$(anyq $EXTRA_FLAGS '${{ inputs.expression }}' '${{ inputs.file }}')
+        else
+          RESULT=$(anyq $EXTRA_FLAGS '${{ inputs.expression }}')
+        fi
+
+        # Store multi-line output safely
+        EOF=$(openssl rand -hex 8)
+        echo "result<<$EOF" >> "$GITHUB_OUTPUT"
+        echo "$RESULT"      >> "$GITHUB_OUTPUT"
+        echo "$EOF"         >> "$GITHUB_OUTPUT"
