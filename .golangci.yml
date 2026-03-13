@@ -1,33 +1,48 @@
-# golangci-lint configuration
+# golangci-lint v2 configuration
 # Docs: https://golangci-lint.run/usage/configuration/
-
+# Migration guide: https://golangci-lint.run/docs/product/migration-guide/
 version: "2"
 
 linters:
+  # Default-enabled linters (no need to list explicitly):
+  #   errcheck, govet, ineffassign, staticcheck, unused
+  # Only linters not in the default set are listed here.
   enable:
-    - errcheck       # unchecked errors
-    - govet          # go vet checks
-    - ineffassign    # ineffectual assignments
-    - staticcheck    # static analysis (SA*, S*, QF*, gosimple)
-    - unused         # unused code
-    - misspell       # spelling mistakes in comments/strings
-    - bodyclose      # HTTP response body not closed
-    - noctx          # HTTP requests without context
-    - gosec          # security checks
+    - bodyclose  # HTTP response body not closed
+    - gosec      # security checks
+    - misspell   # spelling mistakes in comments/strings
+    - noctx      # HTTP requests without context.Context
 
   settings:
     gosec:
       excludes:
-        - G304  # file path from variable — expected for a CLI tool that reads user-specified files
+        - G304  # Potential file inclusion via variable — intentional; anyq is a CLI that reads user-specified files
+
+  exclusions:
+    generated: lax  # apply relaxed rules to generated files
+    presets:
+      - comments              # suppress missing-comment warnings
+      - common-false-positives # suppress well-known false positives
+      - legacy                # suppress issues from pre-modules Go patterns
+      - std-error-handling    # suppress errors from standard library error handling idioms
+    rules:
+      # Test files don't need strict error checking or security scanning
+      - linters:
+          - errcheck
+          - gosec
+        path: _test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
 
 formatters:
   enable:
-    - gofmt          # formatting
-    - goimports      # import ordering
-
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - errcheck
-        - gosec
+    - gofmt     # standard Go formatting
+    - goimports # import grouping and ordering
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
