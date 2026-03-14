@@ -34,7 +34,7 @@ func Run(r io.Reader, w io.Writer, query string, data []byte, opts Options) erro
 	inputFmt := opts.InputFormat
 
 	// Auto-detect if not specified.
-	if inputFmt == detector.FormatUnknown {
+	if inputFmt == detector.FormatUnknown || inputFmt == "" {
 		inputFmt = detector.FromBytes(data)
 		if inputFmt == detector.FormatUnknown {
 			// Default to JSON (mirrors jq behaviour)
@@ -43,7 +43,7 @@ func Run(r io.Reader, w io.Writer, query string, data []byte, opts Options) erro
 	}
 
 	outputFmt := opts.OutputFormat
-	if outputFmt == detector.FormatUnknown {
+	if outputFmt == detector.FormatUnknown || outputFmt == "" {
 		outputFmt = inputFmt
 	}
 

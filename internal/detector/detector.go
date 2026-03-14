@@ -67,8 +67,13 @@ func fromBytes(data []byte) Format {
 
 	first := trimmed[0]
 
-	// JSON always starts with { or [
-	if first == '{' || first == '[' {
+	// JSON always starts with { or [, but only if it's not a TOML section header.
+	// A TOML section header looks like [word] (letter after bracket), whereas
+	// a JSON array has a value character ([", [{, [[, [0-9, [t, [f, [n) or whitespace.
+	if first == '{' {
+		return FormatJSON
+	}
+	if first == '[' && !isTOMLSectionHeader(trimmed) {
 		return FormatJSON
 	}
 
@@ -83,6 +88,19 @@ func fromBytes(data []byte) Format {
 	}
 
 	return FormatUnknown
+}
+
+// isTOMLSectionHeader reports whether data starts with a TOML table header [word...].
+// This distinguishes [section] from a JSON array like ["a","b"].
+func isTOMLSectionHeader(data []byte) bool {
+	// Must start with [ followed by a letter or underscore (TOML bare key chars)
+	if len(data) < 2 {
+		return false
+	}
+	second := data[1]
+	return (second >= 'a' && second <= 'z') ||
+		(second >= 'A' && second <= 'Z') ||
+		second == '_' || second == '"'
 }
 
 func isTOML(data []byte) bool {
