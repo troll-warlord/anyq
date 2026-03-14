@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/troll-warlord/anyq/internal/detector"
 	"github.com/troll-warlord/anyq/internal/engine"
+	"golang.org/x/term"
 )
 
 // Version, Commit, and Date are set at build time via -ldflags.
@@ -29,6 +30,7 @@ var (
 	exitStatus   bool
 	inputFile    string
 	outputFile   string
+	noColor      bool
 )
 
 var rootCmd = &cobra.Command{
@@ -61,13 +63,27 @@ func Execute() {
 func init() {
 	rootCmd.Flags().StringVarP(&inputFormat, "input-format", "f", "", "input format: json|yaml|toml (auto-detected by default)")
 	rootCmd.Flags().StringVarP(&outputFormat, "output-format", "o", "", "output format: json|yaml|toml (defaults to input format)")
-	rootCmd.Flags().BoolVar(&pretty, "pretty", false, "pretty-print JSON output (always on for YAML/TOML)")
+	rootCmd.Flags().BoolVar(&pretty, "pretty", true, "pretty-print JSON output (always on for YAML/TOML)")
 	rootCmd.Flags().BoolVarP(&rawOutput, "raw-output", "r", false, "output strings without JSON quotes")
 	rootCmd.Flags().BoolVarP(&compact, "compact", "c", false, "compact JSON output (no whitespace)")
 	rootCmd.Flags().BoolVarP(&nullInput, "null-input", "n", false, "use null as input; do not read any input")
 	rootCmd.Flags().BoolVarP(&exitStatus, "exit-status", "e", false, "exit 1 if the last output is false or null")
 	rootCmd.Flags().StringVarP(&inputFile, "input", "i", "", "input file (alternative to positional file argument)")
 	rootCmd.Flags().StringVarP(&outputFile, "write-output", "w", "", "write output to file instead of stdout")
+	rootCmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "disable colored output (also honoured via NO_COLOR env var)")
+}
+
+// colorEnabled reports whether ANSI color output should be used.
+// Color is on by default when stdout is a TTY and NO_COLOR is not set.
+// Writing to a file (--write-output) always disables color.
+func colorEnabled(writingToFile bool) bool {
+	if writingToFile || noColor {
+		return false
+	}
+	if os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb" {
+		return false
+	}
+	return term.IsTerminal(int(os.Stdout.Fd())) // #nosec G115 -- fd is always a small non-negative integer
 }
 
 func run(cmd *cobra.Command, args []string) error {
@@ -97,6 +113,7 @@ func run(cmd *cobra.Command, args []string) error {
 		Compact:      compact,
 		NullInput:    nullInput,
 		ExitStatus:   exitStatus,
+		Color:        colorEnabled(outputFile != ""),
 	}
 
 	// Resolve output writer.

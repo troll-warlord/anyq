@@ -14,6 +14,7 @@ import (
 	"github.com/itchyny/gojq"
 	"github.com/pelletier/go-toml/v2"
 	"github.com/troll-warlord/anyq/internal/detector"
+	"github.com/troll-warlord/anyq/internal/highlight"
 )
 
 // Options controls engine behaviour.
@@ -25,6 +26,7 @@ type Options struct {
 	Compact      bool            // -c: compact JSON output
 	NullInput    bool            // -n: use null as input (no parsing)
 	ExitStatus   bool            // -e: exit 1 if last value is false/null
+	Color        bool            // enable ANSI syntax highlighting on output
 }
 
 // Run executes the full pipeline: read → detect → parse → query → serialize → write.
@@ -70,8 +72,14 @@ func Run(r io.Reader, w io.Writer, query string, data []byte, opts Options) erro
 		if err != nil {
 			return fmt.Errorf("serialize result %d: %w", i, err)
 		}
-		if _, err := fmt.Fprint(w, out); err != nil {
-			return err
+		if opts.Color && !opts.RawOutput {
+			if err := highlight.Write(w, out, outputFmt); err != nil {
+				return err
+			}
+		} else {
+			if _, err := fmt.Fprint(w, out); err != nil {
+				return err
+			}
 		}
 	}
 
