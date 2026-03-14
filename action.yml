@@ -1,4 +1,4 @@
-name: anyq
+name: action-anyq
 description: "Query JSON, YAML, and TOML files with full jq expression syntax"
 author: "troll-warlord"
 branding:
