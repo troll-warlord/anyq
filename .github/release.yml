@@ -25,6 +25,7 @@ changelog:
         - chore
         - ci
         - dependencies
+        - refactor
     - title: "📝 Other Changes"
       labels:
         - "*"
