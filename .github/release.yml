@@ -6,7 +6,6 @@ changelog:
     - title: "🚀 New Features"
       labels:
         - enhancement
-        - feature
     - title: "🐛 Bug Fixes"
       labels:
         - bug
@@ -25,6 +24,7 @@ changelog:
         - chore
         - ci
         - dependencies
+        - refactor
     - title: "📝 Other Changes"
       labels:
         - "*"

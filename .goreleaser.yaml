@@ -46,33 +46,7 @@ checksum:
   algorithm: sha256
 
 changelog:
-  sort: asc
-  use: github
-  abbrev: 0
-  format: "{{.Message}} (@{{.AuthorUsername}})"
-  filters:
-    exclude:
-      - "^docs:"
-      - "^test:"
-      - "^chore:"
-      - "^ci:"
-      - Merge pull request
-      - Merge branch
-  groups:
-    - title: "🚀 New Features"
-      regexp: "(?i)^feat"
-      order: 0
-    - title: "🐛 Bug Fixes"
-      regexp: "(?i)^fix"
-      order: 1
-    - title: "⚡ Performance"
-      regexp: "(?i)^perf"
-      order: 2
-    - title: "🔒 Security"
-      regexp: "(?i)^sec"
-      order: 3
-    - title: "📝 Other Changes"
-      order: 999
+  use: github-native
 
 release:
   github:
