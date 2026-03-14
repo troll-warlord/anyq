@@ -37,6 +37,7 @@ jobs:
         run: GOTOOLCHAIN=auto go install github.com/caarlos0/svu/v3@latest
 
       - name: Calculate and push tag
+        id: tag
         run: |
           NEW_TAG=$(svu ${{ github.event.inputs.bump }})
           echo "Tagging $NEW_TAG"
@@ -44,6 +45,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag "$NEW_TAG"
           git push origin "$NEW_TAG"
+          echo "new_tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU (multi-arch Docker builds)
         uses: docker/setup-qemu-action@v3
@@ -67,3 +69,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+
+      - name: Update floating major version tag
+        run: |
+          MAJOR=$(echo "${{ steps.tag.outputs.new_tag }}" | cut -d. -f1)
+          git tag -fa "$MAJOR" -m "Update $MAJOR floating tag to ${{ steps.tag.outputs.new_tag }}"
+          git push origin "$MAJOR" --force
+
+      - name: Write job summary
+        run: |
+          MAJOR=$(echo "${{ steps.tag.outputs.new_tag }}" | cut -d. -f1)
+          echo "## 🚀 Released ${{ steps.tag.outputs.new_tag }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| | |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Version** | \`${{ steps.tag.outputs.new_tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Floating tag** | \`$MAJOR\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Release** | https://github.com/${{ github.repository }}/releases/tag/${{ steps.tag.outputs.new_tag }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| **Docker** | \`ghcr.io/${{ github.repository }}:${{ steps.tag.outputs.new_tag }}\` |" >> "$GITHUB_STEP_SUMMARY"
