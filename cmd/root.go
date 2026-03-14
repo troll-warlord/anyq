@@ -83,7 +83,7 @@ func colorEnabled(writingToFile bool) bool {
 	if os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb" {
 		return false
 	}
-	return term.IsTerminal(int(os.Stdout.Fd()))
+	return term.IsTerminal(int(os.Stdout.Fd())) // #nosec G115 -- fd is always a small non-negative integer
 }
 
 func run(cmd *cobra.Command, args []string) error {
