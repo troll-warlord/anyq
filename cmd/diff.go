@@ -55,7 +55,7 @@ func runDiff(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	diff.Print(cmd.OutOrStdout(), changes)
+	diff.Print(cmd.OutOrStdout(), changes, colorEnabled(false))
 
 	if diffExitStatus && len(changes) > 0 {
 		os.Exit(1)

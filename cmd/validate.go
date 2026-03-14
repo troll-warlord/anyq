@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/troll-warlord/anyq/internal/highlight"
 	"github.com/troll-warlord/anyq/internal/validator"
 )
 
@@ -52,15 +53,25 @@ func runValidate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	useColor := colorEnabled(false)
+
 	if result.Valid {
-		fmt.Fprintln(cmd.OutOrStdout(), "✓ Valid")
+		if useColor {
+			fmt.Fprintf(cmd.OutOrStdout(), highlight.Green+"✓ Valid"+highlight.Reset+"\n")
+		} else {
+			fmt.Fprintln(cmd.OutOrStdout(), "✓ Valid")
+		}
 		return nil
 	}
 
 	// Print structured errors to stderr and exit 1.
 	// We print ourselves rather than returning an error so cobra does not
 	// add its own "Error: ..." prefix on top of our formatted output.
-	fmt.Fprintf(os.Stderr, "✗ Validation failed: %d error(s)\n\n", len(result.Errors))
+	if useColor {
+		fmt.Fprintf(os.Stderr, highlight.Red+"✗ Validation failed: %d error(s)"+highlight.Reset+"\n\n", len(result.Errors))
+	} else {
+		fmt.Fprintf(os.Stderr, "✗ Validation failed: %d error(s)\n\n", len(result.Errors))
+	}
 	for _, e := range result.Errors {
 		fmt.Fprintf(os.Stderr, "  • %s\n", e)
 	}

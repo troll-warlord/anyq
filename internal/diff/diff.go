@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	r3diff "github.com/r3labs/diff/v3"
+	"github.com/troll-warlord/anyq/internal/highlight"
 )
 
 // Change represents a single semantic difference between two documents.
@@ -49,7 +50,9 @@ func Compare(a, b interface{}) ([]Change, error) {
 //   - .key  "new value"          (key was added)
 //   - .key  "old value"          (key was removed)
 //     ~  .key  "old"  →  "new"      (value was changed)
-func Print(w io.Writer, changes []Change) {
+//
+// When color is true, additions are green, deletions red, and updates yellow.
+func Print(w io.Writer, changes []Change, color bool) {
 	if len(changes) == 0 {
 		fmt.Fprintln(w, "No differences found.")
 		return
@@ -57,11 +60,23 @@ func Print(w io.Writer, changes []Change) {
 	for _, c := range changes {
 		switch c.Type {
 		case "create":
-			fmt.Fprintf(w, "+  %-44s %s\n", c.Path, formatVal(c.To))
+			if color {
+				fmt.Fprintf(w, highlight.Green+"+  %-44s %s"+highlight.Reset+"\n", c.Path, formatVal(c.To))
+			} else {
+				fmt.Fprintf(w, "+  %-44s %s\n", c.Path, formatVal(c.To))
+			}
 		case "delete":
-			fmt.Fprintf(w, "-  %-44s %s\n", c.Path, formatVal(c.From))
+			if color {
+				fmt.Fprintf(w, highlight.Red+"-  %-44s %s"+highlight.Reset+"\n", c.Path, formatVal(c.From))
+			} else {
+				fmt.Fprintf(w, "-  %-44s %s\n", c.Path, formatVal(c.From))
+			}
 		case "update":
-			fmt.Fprintf(w, "~  %-44s %s  →  %s\n", c.Path, formatVal(c.From), formatVal(c.To))
+			if color {
+				fmt.Fprintf(w, highlight.Yellow+"~  %-44s %s  →  %s"+highlight.Reset+"\n", c.Path, formatVal(c.From), formatVal(c.To))
+			} else {
+				fmt.Fprintf(w, "~  %-44s %s  →  %s\n", c.Path, formatVal(c.From), formatVal(c.To))
+			}
 		}
 	}
 }
