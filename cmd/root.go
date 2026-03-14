@@ -2,14 +2,18 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"os"
 	"strings"
 
+	"github.com/itchyny/gojq"
 	"github.com/spf13/cobra"
+	"github.com/troll-warlord/anyq/internal/ai"
 	"github.com/troll-warlord/anyq/internal/detector"
 	"github.com/troll-warlord/anyq/internal/engine"
+	"github.com/troll-warlord/anyq/internal/highlight"
 	"golang.org/x/term"
 )
 
@@ -31,6 +35,8 @@ var (
 	inputFile    string
 	outputFile   string
 	noColor      bool
+	aiQuery      string
+	showQuery    bool
 )
 
 var rootCmd = &cobra.Command{
@@ -44,10 +50,11 @@ Examples:
   anyq '.[] | select(.age > 30)' users.json
   cat config.toml | anyq '.server.port'
   anyq -o yaml '.database' config.json
-  anyq --pretty '.' config.yaml`,
+  anyq --pretty '.' config.yaml
+  anyq --ai "show all users older than 30" users.json`,
 
 	Version:      Version,
-	Args:         cobra.MinimumNArgs(1),
+	Args:         cobra.ArbitraryArgs,
 	SilenceUsage: true,
 	RunE:         run,
 }
@@ -71,6 +78,8 @@ func init() {
 	rootCmd.Flags().StringVarP(&inputFile, "input", "i", "", "input file (alternative to positional file argument)")
 	rootCmd.Flags().StringVarP(&outputFile, "write-output", "w", "", "write output to file instead of stdout")
 	rootCmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "disable colored output (also honoured via NO_COLOR env var)")
+	rootCmd.Flags().StringVar(&aiQuery, "ai", "", "natural language query translated to jq via AI (set ANYQ_AI_PROVIDER + API key)")
+	rootCmd.Flags().BoolVar(&showQuery, "show-query", false, "print the AI-generated query and exit without running")
 }
 
 // colorEnabled reports whether ANSI color output should be used.
@@ -87,9 +96,21 @@ func colorEnabled(writingToFile bool) bool {
 }
 
 func run(cmd *cobra.Command, args []string) error {
-	// args[0] is always the jq expression.
-	query := args[0]
-	filePaths := args[1:]
+	// Determine jq expression and file paths.
+	// In --ai mode the jq expression is generated; all positional args are file paths.
+	// In normal mode args[0] is the jq expression.
+	var query string
+	var filePaths []string
+
+	if aiQuery != "" {
+		filePaths = args
+	} else {
+		if len(args) == 0 {
+			return fmt.Errorf("requires a jq expression as the first argument, or use --ai")
+		}
+		query = args[0]
+		filePaths = args[1:]
+	}
 
 	// --input / -i flag overrides positional file argument.
 	if inputFile != "" {
@@ -125,6 +146,80 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 		defer f.Close()
 		out = f
+	}
+
+	// AI mode: sample data → extract schema → translate NL → jq expression.
+	// When stdin is used as the data source it is buffered here so it can be
+	// processed again after the query is generated.
+	var bufferedStdin []byte
+	if aiQuery != "" {
+		var sampleData []byte
+		if len(filePaths) > 0 {
+			var err error
+			sampleData, err = os.ReadFile(filePaths[0])
+			if err != nil {
+				return fmt.Errorf("cannot read file %q: %w", filePaths[0], err)
+			}
+		} else if !nullInput {
+			var err error
+			bufferedStdin, err = io.ReadAll(cmd.InOrStdin())
+			if err != nil {
+				return fmt.Errorf("reading stdin: %w", err)
+			}
+			sampleData = bufferedStdin
+		}
+
+		schema, err := ai.ExtractSchema(sampleData)
+		if err != nil {
+			return fmt.Errorf("schema extraction: %w", err)
+		}
+
+		provider, err := ai.New()
+		if err != nil {
+			return err
+		}
+
+		expr, err := ai.TranslateWithValidation(provider, schema, aiQuery, func(e string) error {
+			_, err := gojq.Parse(e)
+			return err
+		}, 2)
+		if err != nil {
+			return fmt.Errorf("AI translation failed: %w", err)
+		}
+
+		// Safety check: always show the generated expression.
+		useColor := colorEnabled(outputFile != "")
+		if useColor {
+			fmt.Fprintf(os.Stderr, highlight.Green+"✦ Generated query: "+highlight.Reset+"%s\n", expr)
+		} else {
+			fmt.Fprintf(os.Stderr, "✦ Generated query: %s\n", expr)
+		}
+
+		if showQuery {
+			fmt.Fprintln(cmd.OutOrStdout(), expr)
+			return nil
+		}
+
+		// Interactive confirmation when running in a terminal.
+		if term.IsTerminal(int(os.Stdin.Fd())) { // #nosec G115
+			fmt.Fprint(os.Stderr, "Run? [Y/n]: ")
+			reader := bufio.NewReader(os.Stdin)
+			response, _ := reader.ReadString('\n')
+			response = strings.TrimSpace(strings.ToLower(response))
+			if response != "" && response != "y" {
+				return nil
+			}
+		}
+
+		query = expr
+
+		// If stdin was buffered, process it immediately and return.
+		if bufferedStdin != nil {
+			if inFmt == detector.FormatUnknown || inFmt == "" {
+				opts.InputFormat = detector.FromBytes(bufferedStdin)
+			}
+			return runQuery(out, query, bufferedStdin, opts)
+		}
 	}
 
 	// No file paths → read from stdin.
