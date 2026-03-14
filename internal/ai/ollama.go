@@ -2,6 +2,7 @@ package ai
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,7 +32,7 @@ func (p *ollamaProvider) Translate(schema, request string) (string, error) {
 		return "", err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, p.baseURL+"/api/chat", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, p.baseURL+"/api/chat", bytes.NewReader(body))
 	if err != nil {
 		return "", err
 	}

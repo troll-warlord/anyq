@@ -2,6 +2,7 @@ package ai
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -42,7 +43,7 @@ func (p *geminiProvider) Translate(schema, request string) (string, error) {
 		"https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s",
 		p.model, p.apiKey,
 	)
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return "", err
 	}

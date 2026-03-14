@@ -2,6 +2,7 @@ package ai
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -35,7 +36,7 @@ func (p *openAIProvider) Translate(schema, request string) (string, error) {
 		return "", err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, "https://api.openai.com/v1/chat/completions", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, "https://api.openai.com/v1/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return "", err
 	}
