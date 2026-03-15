@@ -66,7 +66,14 @@ func Run(r io.Reader, w io.Writer, query string, data []byte, opts Options) erro
 		return err
 	}
 
-	// Serialize each result value.
+	return writeResults(w, results, outputFmt, opts)
+}
+
+// ErrExitStatus is returned when --exit-status is set and the last value is false/null.
+var ErrExitStatus = fmt.Errorf("exit status 1")
+
+// writeResults serializes and writes every query result to w.
+func writeResults(w io.Writer, results []interface{}, outputFmt detector.Format, opts Options) error {
 	for i, result := range results {
 		out, err := serialize(result, outputFmt, opts)
 		if err != nil {
@@ -82,20 +89,32 @@ func Run(r io.Reader, w io.Writer, query string, data []byte, opts Options) erro
 			}
 		}
 	}
-
-	// Handle --exit-status: if the last value is false or null, return exit code sentinel.
 	if opts.ExitStatus && len(results) > 0 {
 		last := results[len(results)-1]
 		if last == nil || last == false {
 			return ErrExitStatus
 		}
 	}
-
 	return nil
 }
 
-// ErrExitStatus is returned when --exit-status is set and the last value is false/null.
-var ErrExitStatus = fmt.Errorf("exit status 1")
+// RunValues executes query against a pre-parsed slice of values.
+// The slice is passed directly as the jq input — used by slurp mode where
+// all documents are combined into a single array before querying.
+func RunValues(w io.Writer, query string, inputs []interface{}, opts Options) error {
+	outputFmt := opts.OutputFormat
+	if outputFmt == detector.FormatUnknown || outputFmt == "" {
+		outputFmt = opts.InputFormat
+		if outputFmt == detector.FormatUnknown || outputFmt == "" {
+			outputFmt = detector.FormatJSON
+		}
+	}
+	results, err := execQuery(query, inputs)
+	if err != nil {
+		return err
+	}
+	return writeResults(w, results, outputFmt, opts)
+}
 
 // Parse converts raw bytes in the given format to a generic Go value.
 // It is the exported counterpart of the internal parse function, intended
@@ -103,6 +122,58 @@ var ErrExitStatus = fmt.Errorf("exit status 1")
 // without running a jq query.
 func Parse(data []byte, fmt_ detector.Format) (interface{}, error) {
 	return parse(data, fmt_)
+}
+
+// ParseMulti parses all documents from data and returns them as a slice.
+// For JSON it uses a streaming decoder so concatenated objects (e.g. the
+// output of `go list -json ./...`) are each returned as a separate element.
+// For YAML it splits on `---` document separators.
+// For TOML there is only ever one document, so the slice has length 1.
+func ParseMulti(data []byte, fmt_ detector.Format) ([]interface{}, error) {
+	data = stripBOM(data)
+	switch fmt_ {
+	case detector.FormatJSON:
+		dec := json.NewDecoder(bytes.NewReader(data))
+		dec.UseNumber()
+		var docs []interface{}
+		for {
+			var v interface{}
+			if err := dec.Decode(&v); err != nil {
+				if err.Error() == "EOF" {
+					break
+				}
+				return nil, fmt.Errorf("invalid JSON: %w", err)
+			}
+			norm, err := normalise(v)
+			if err != nil {
+				return nil, err
+			}
+			docs = append(docs, norm)
+		}
+		return docs, nil
+	case detector.FormatYAML:
+		// Split on YAML document separators.
+		parts := bytes.Split(data, []byte("\n---\n"))
+		var docs []interface{}
+		for _, part := range parts {
+			part = bytes.TrimSpace(part)
+			if len(part) == 0 {
+				continue
+			}
+			v, err := parseYAML(part)
+			if err != nil {
+				return nil, err
+			}
+			docs = append(docs, v)
+		}
+		return docs, nil
+	default:
+		v, err := parse(data, fmt_)
+		if err != nil {
+			return nil, err
+		}
+		return []interface{}{v}, nil
+	}
 }
 
 // stripBOM removes a leading UTF-8 BOM (EF BB BF) if present.

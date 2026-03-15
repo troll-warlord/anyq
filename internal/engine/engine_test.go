@@ -243,3 +243,179 @@ func TestRun_YAMLToJSON(t *testing.T) {
 		t.Errorf("YAML→JSON: unexpected output %q", out)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// RunValues (slurp mode)
+// ---------------------------------------------------------------------------
+
+func TestRunValues_SingleDoc(t *testing.T) {
+	v, err := Parse([]byte(`{"x":1}`), detector.FormatJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var buf bytes.Buffer
+	opts := Options{InputFormat: detector.FormatJSON, OutputFormat: detector.FormatJSON, Compact: true}
+	if err := RunValues(&buf, ".", []interface{}{v}, opts); err != nil {
+		t.Fatalf("RunValues: %v", err)
+	}
+	out := strings.TrimSpace(buf.String())
+	// Input is wrapped in a slice, so output should be an array.
+	if !strings.HasPrefix(out, "[") {
+		t.Errorf("expected array output, got: %s", out)
+	}
+	if !strings.Contains(out, `"x"`) {
+		t.Errorf("expected key x, got: %s", out)
+	}
+}
+
+func TestRunValues_MultipleDocsCombined(t *testing.T) {
+	a, _ := Parse([]byte(`{"n":1}`), detector.FormatJSON)
+	b, _ := Parse([]byte(`{"n":2}`), detector.FormatJSON)
+	var buf bytes.Buffer
+	opts := Options{InputFormat: detector.FormatJSON, OutputFormat: detector.FormatJSON, Compact: true}
+	if err := RunValues(&buf, "length", []interface{}{a, b}, opts); err != nil {
+		t.Fatalf("RunValues: %v", err)
+	}
+	if strings.TrimSpace(buf.String()) != "2" {
+		t.Errorf("expected 2, got: %s", buf.String())
+	}
+}
+
+func TestRunValues_SumField(t *testing.T) {
+	a, _ := Parse([]byte(`{"v":10}`), detector.FormatJSON)
+	b, _ := Parse([]byte(`{"v":20}`), detector.FormatJSON)
+	var buf bytes.Buffer
+	opts := Options{InputFormat: detector.FormatJSON, OutputFormat: detector.FormatJSON, Compact: true}
+	if err := RunValues(&buf, "[.[].v] | add", []interface{}{a, b}, opts); err != nil {
+		t.Fatalf("RunValues: %v", err)
+	}
+	if strings.TrimSpace(buf.String()) != "30" {
+		t.Errorf("expected 30, got: %s", buf.String())
+	}
+}
+
+func TestRunValues_EmptySlice(t *testing.T) {
+	var buf bytes.Buffer
+	opts := Options{InputFormat: detector.FormatJSON, OutputFormat: detector.FormatJSON, Compact: true}
+	if err := RunValues(&buf, "length", []interface{}{}, opts); err != nil {
+		t.Fatalf("RunValues: %v", err)
+	}
+	if strings.TrimSpace(buf.String()) != "0" {
+		t.Errorf("expected 0, got: %s", buf.String())
+	}
+}
+
+func TestRunValues_DefaultsOutputFormatToJSON(t *testing.T) {
+	v, _ := Parse([]byte(`{"k":"v"}`), detector.FormatJSON)
+	var buf bytes.Buffer
+	// No output format set — should default to JSON.
+	opts := Options{Compact: true}
+	if err := RunValues(&buf, ".", []interface{}{v}, opts); err != nil {
+		t.Fatalf("RunValues: %v", err)
+	}
+	out := strings.TrimSpace(buf.String())
+	if !strings.HasPrefix(out, "[") {
+		t.Errorf("expected JSON array, got: %s", out)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// ParseMulti
+// ---------------------------------------------------------------------------
+
+func TestParseMulti_SingleJSON(t *testing.T) {
+	docs, err := ParseMulti([]byte(`{"a":1}`), detector.FormatJSON)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(docs) != 1 {
+		t.Fatalf("expected 1 doc, got %d", len(docs))
+	}
+}
+
+func TestParseMulti_ConcatenatedJSON(t *testing.T) {
+	// Simulates `go list -json ./...` output: multiple objects with no separator.
+	input := `{"Name":"a"}` + "\n" + `{"Name":"b"}` + "\n" + `{"Name":"c"}`
+	docs, err := ParseMulti([]byte(input), detector.FormatJSON)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(docs) != 3 {
+		t.Fatalf("expected 3 docs, got %d", len(docs))
+	}
+	// Verify each doc is independently accessible.
+	for i, d := range docs {
+		m, ok := d.(map[string]interface{})
+		if !ok {
+			t.Fatalf("doc %d: expected map, got %T", i, d)
+		}
+		if m["Name"] == nil {
+			t.Errorf("doc %d: missing Name field", i)
+		}
+	}
+}
+
+func TestParseMulti_EmptyJSON(t *testing.T) {
+	docs, err := ParseMulti([]byte(`   `), detector.FormatJSON)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(docs) != 0 {
+		t.Errorf("expected 0 docs, got %d", len(docs))
+	}
+}
+
+func TestParseMulti_InvalidJSON(t *testing.T) {
+	_, err := ParseMulti([]byte(`{"a": INVALID}`), detector.FormatJSON)
+	if err == nil {
+		t.Fatal("expected error for invalid JSON, got nil")
+	}
+}
+
+func TestParseMulti_SingleYAML(t *testing.T) {
+	docs, err := ParseMulti([]byte("name: alice\nage: 30"), detector.FormatYAML)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(docs) != 1 {
+		t.Fatalf("expected 1 doc, got %d", len(docs))
+	}
+}
+
+func TestParseMulti_MultiDocYAML(t *testing.T) {
+	input := "name: alice\n---\nname: bob\n---\nname: carol"
+	docs, err := ParseMulti([]byte(input), detector.FormatYAML)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(docs) != 3 {
+		t.Fatalf("expected 3 docs, got %d", len(docs))
+	}
+}
+
+func TestParseMulti_TOML(t *testing.T) {
+	// TOML always returns one document.
+	docs, err := ParseMulti([]byte("[server]\nhost = \"localhost\""), detector.FormatTOML)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(docs) != 1 {
+		t.Fatalf("expected 1 doc, got %d", len(docs))
+	}
+}
+
+func TestParseMulti_JSONNumberPrecision(t *testing.T) {
+	// Numbers should be preserved via UseNumber, not converted to float64.
+	docs, err := ParseMulti([]byte(`{"id":12345678901234567}`), detector.FormatJSON)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	m, ok := docs[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected map, got %T", docs[0])
+	}
+	if _, isNum := m["id"].(interface{ String() string }); !isNum {
+		// json.Number implements String(); float64 does not.
+		t.Errorf("expected json.Number for large integer, got %T", m["id"])
+	}
+}

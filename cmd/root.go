@@ -37,6 +37,7 @@ var (
 	noColor      bool
 	aiQuery      string
 	showQuery    bool
+	slurp        bool
 )
 
 var rootCmd = &cobra.Command{
@@ -80,6 +81,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "disable colored output (also honoured via NO_COLOR env var)")
 	rootCmd.Flags().StringVar(&aiQuery, "ai", "", "natural language query translated to jq via AI (set ANYQ_AI_PROVIDER + API key)")
 	rootCmd.Flags().BoolVar(&showQuery, "show-query", false, "print the AI-generated query and exit without running")
+	rootCmd.Flags().BoolVar(&slurp, "slurp", false, "read all inputs into an array and run the expression once")
 }
 
 // colorEnabled reports whether ANSI color output should be used.
@@ -217,6 +219,16 @@ func run(cmd *cobra.Command, args []string) error {
 		if bufferedStdin != nil {
 			if inFmt == detector.FormatUnknown || inFmt == "" {
 				opts.InputFormat = detector.FromBytes(bufferedStdin)
+				if opts.InputFormat == detector.FormatUnknown {
+					opts.InputFormat = detector.FormatJSON
+				}
+			}
+			if slurp {
+				docs, err := engine.ParseMulti(bufferedStdin, opts.InputFormat)
+				if err != nil {
+					return err
+				}
+				return engine.RunValues(out, query, docs, opts)
 			}
 			return runQuery(out, query, bufferedStdin, opts)
 		}
@@ -231,13 +243,61 @@ func run(cmd *cobra.Command, args []string) error {
 		// Auto-detect from content when reading stdin.
 		if inFmt == detector.FormatUnknown {
 			opts.InputFormat = detector.FromBytes(data)
+			if opts.InputFormat == detector.FormatUnknown {
+				opts.InputFormat = detector.FormatJSON
+			}
+		}
+		if slurp {
+			docs, err := engine.ParseMulti(data, opts.InputFormat)
+			if err != nil {
+				return err
+			}
+			return engine.RunValues(out, query, docs, opts)
 		}
 		return runQuery(out, query, data, opts)
 	}
 
 	// Null input mode: run once with no data.
 	if nullInput {
+		if slurp {
+			return engine.RunValues(out, query, []interface{}{nil}, opts)
+		}
 		return runQuery(out, query, nil, opts)
+	}
+
+	// Slurp: collect all parsed values from every file, then run query once.
+	if slurp {
+		var docs []interface{}
+		var firstFmt detector.Format
+		for _, path := range filePaths {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return fmt.Errorf("cannot read file %q: %w", path, err)
+			}
+			fileFmt := inFmt
+			if fileFmt == detector.FormatUnknown {
+				detectedFmt, ferr := detector.FromPath(path)
+				if ferr != nil {
+					detectedFmt = detector.FromBytes(data)
+				}
+				if detectedFmt == detector.FormatUnknown {
+					detectedFmt = detector.FormatJSON
+				}
+				fileFmt = detectedFmt
+			}
+			if firstFmt == "" {
+				firstFmt = fileFmt
+			}
+			v, err := engine.ParseMulti(data, fileFmt)
+			if err != nil {
+				return err
+			}
+			docs = append(docs, v...)
+		}
+		if opts.InputFormat == detector.FormatUnknown || opts.InputFormat == "" {
+			opts.InputFormat = firstFmt
+		}
+		return engine.RunValues(out, query, docs, opts)
 	}
 
 	// Process each file.
