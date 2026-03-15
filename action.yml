@@ -1,14 +1,19 @@
 name: action-anyq
-description: "Query JSON, YAML, and TOML files with full jq expression syntax"
+description: "Query JSON, YAML, and TOML files in plain English or with jq syntax"
 author: "troll-warlord"
 branding:
-  icon: "filter"
+  icon: "terminal"
   color: "blue"
 
 inputs:
   expression:
-    description: "jq expression to evaluate (e.g. '.database.host')"
-    required: true
+    description: "jq expression to evaluate (e.g. '.database.host'). Required unless 'ai' is set."
+    required: false
+    default: ""
+  ai:
+    description: "Natural language query (e.g. 'names of all admin users'). Requires ANYQ_AI_PROVIDER and the corresponding API key to be set as env vars."
+    required: false
+    default: ""
   file:
     description: "Path to the input file (JSON, YAML, or TOML). Omit to use stdin."
     required: false
@@ -25,6 +30,10 @@ inputs:
     description: "Pretty-print JSON output"
     required: false
     default: "true"
+  slurp:
+    description: "Read all inputs into an array before running the expression. Useful for multi-file queries and tools like 'go list -json'."
+    required: false
+    default: "false"
 
 outputs:
   result:
@@ -45,7 +54,7 @@ runs:
         esac
         VERSION=$(curl -sSf https://api.github.com/repos/troll-warlord/anyq/releases/latest \
                     | grep '"tag_name"' | sed 's/.*"v\([^"]*\)".*/\1/')
-        URL="https://github.com/troll-warlord/anyq/releases/download/v${VERSION}/anyq_${VERSION}_${OS}_${ARCH}.tar.gz"
+        URL="https://github.com/troll-warlord/anyq/releases/download/v${VERSION}/anyq_${OS}_${ARCH}.tar.gz"
         curl -sSfL "$URL" | tar -xz anyq
         chmod +x anyq
         sudo mv anyq /usr/local/bin/anyq
@@ -54,15 +63,25 @@ runs:
       id: run-anyq
       shell: bash
       run: |
-        EXTRA_FLAGS=""
+        EXTRA_FLAGS="--no-color"
         [ "${{ inputs.raw-output }}" = "true" ] && EXTRA_FLAGS="$EXTRA_FLAGS -r"
         [ "${{ inputs.pretty }}" = "true" ]     && EXTRA_FLAGS="$EXTRA_FLAGS --pretty"
         [ -n "${{ inputs.output-format }}" ]    && EXTRA_FLAGS="$EXTRA_FLAGS -o ${{ inputs.output-format }}"
+        [ "${{ inputs.slurp }}" = "true" ]      && EXTRA_FLAGS="$EXTRA_FLAGS --slurp"
+
+        if [ -n "${{ inputs.ai }}" ]; then
+          QUERY_FLAG="--ai '${{ inputs.ai }}'"
+        elif [ -n "${{ inputs.expression }}" ]; then
+          QUERY_FLAG="'${{ inputs.expression }}'"
+        else
+          echo "Either 'expression' or 'ai' input must be provided." >&2
+          exit 1
+        fi
 
         if [ -n "${{ inputs.file }}" ]; then
-          RESULT=$(anyq $EXTRA_FLAGS '${{ inputs.expression }}' '${{ inputs.file }}')
+          RESULT=$(eval anyq $EXTRA_FLAGS $QUERY_FLAG '${{ inputs.file }}')
         else
-          RESULT=$(anyq $EXTRA_FLAGS '${{ inputs.expression }}')
+          RESULT=$(eval anyq $EXTRA_FLAGS $QUERY_FLAG)
         fi
 
         # Store multi-line output safely
