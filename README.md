@@ -126,6 +126,7 @@ anyq validate [flags] --schema <schema.json> <file>
 | `--pretty` | | Pretty-print output (default: `true`) |
 | `--raw-output` | `-r` | Print strings without surrounding quotes |
 | `--compact` | `-c` | Compact JSON output (no whitespace) |
+| `--slurp` | | Read all inputs into an array, then run expression once |
 | `--null-input` | `-n` | Use `null` as input; no file is read |
 | `--exit-status` | `-e` | Exit 1 if the last output is `false` or `null` |
 | `--write-output` | `-w` | Write output to a file instead of stdout |
@@ -160,6 +161,27 @@ anyq -o toml '.' package.json     # JSON → TOML
 ```bash
 cat config.yaml | anyq --ai "what is the log level"
 kubectl get pods -o json | anyq --ai "names of pods not in Running state"
+```
+
+### Slurp mode — combine multiple documents
+
+`--slurp` reads all input documents into a single array before running the expression. Essential for operations that need the full dataset: `group_by`, `unique_by`, aggregations across files, or the concatenated JSON that tools like `go list -json` produce.
+
+```bash
+# Count packages across the whole codebase
+go list -json ./... | anyq --slurp 'length'
+
+# Collect all unique imports across every package
+go list -json ./... | anyq --slurp '[.[].Imports // [] | .[]] | unique | sort | .[]' -r
+
+# Combine multiple JSON files and group by a field
+anyq --slurp 'group_by(.status)' a.json b.json c.json
+
+# Sum a field across files
+anyq --slurp '[.[].score] | add' results-jan.json results-feb.json
+
+# Multi-document YAML (--- separated)
+anyq --slurp 'length' deployments.yaml
 ```
 
 ### Semantic diff

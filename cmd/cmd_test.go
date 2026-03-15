@@ -25,6 +25,7 @@ func executeCmd(t *testing.T, args ...string) (stdout, stderr string, err error)
 	inputFile = ""
 	outputFile = ""
 	noColor = true // always disable color in tests
+	slurp = false
 
 	var outBuf, errBuf bytes.Buffer
 	rootCmd.SetOut(&outBuf)
@@ -247,4 +248,72 @@ func TestParseFormat(t *testing.T) {
 func init() {
 	// Prevent cobra from calling os.Exit on flag errors in tests.
 	rootCmd.FParseErrWhitelist = cobra.FParseErrWhitelist{UnknownFlags: false}
+}
+
+// ---------------------------------------------------------------------------
+// Slurp mode tests
+// ---------------------------------------------------------------------------
+
+func TestSlurp_SingleFile(t *testing.T) {
+	f := writeTempFile(t, ".json", `{"x":1}`)
+	stdout, _, err := executeCmd(t, "--slurp", ".", f)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Result should be an array wrapping the single document.
+	if !strings.Contains(stdout, `"x"`) {
+		t.Errorf("expected key x in output, got: %s", stdout)
+	}
+	if !strings.HasPrefix(strings.TrimSpace(stdout), "[") {
+		t.Errorf("expected array output, got: %s", stdout)
+	}
+}
+
+func TestSlurp_MultipleFiles(t *testing.T) {
+	f1 := writeTempFile(t, ".json", `{"name":"alice"}`)
+	f2 := writeTempFile(t, ".json", `{"name":"bob"}`)
+	stdout, _, err := executeCmd(t, "--slurp", "length", f1, f2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Two documents slurped → array of length 2.
+	if strings.TrimSpace(stdout) != "2" {
+		t.Errorf("expected 2, got: %s", stdout)
+	}
+}
+
+func TestSlurp_ExtractField(t *testing.T) {
+	f1 := writeTempFile(t, ".json", `{"v":10}`)
+	f2 := writeTempFile(t, ".json", `{"v":20}`)
+	// Sum all .v values across documents.
+	stdout, _, err := executeCmd(t, "--slurp", "[.[].v] | add", f1, f2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.TrimSpace(stdout) != "30" {
+		t.Errorf("expected 30, got: %s", stdout)
+	}
+}
+
+func TestSlurp_YAML(t *testing.T) {
+	f := writeTempFile(t, ".yaml", "name: carol\nage: 25\n")
+	stdout, _, err := executeCmd(t, "--slurp", ".[0].name", f)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(stdout, "carol") {
+		t.Errorf("expected carol in output, got: %s", stdout)
+	}
+}
+
+func TestSlurp_ShortFlag(t *testing.T) {
+	f1 := writeTempFile(t, ".json", `{"n":1}`)
+	f2 := writeTempFile(t, ".json", `{"n":2}`)
+	stdout, _, err := executeCmd(t, "--slurp", "length", f1, f2)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.TrimSpace(stdout) != "2" {
+		t.Errorf("expected 2, got: %s", stdout)
+	}
 }
