@@ -81,7 +81,7 @@ Sensitive field names (`password`, `token`, `secret`, `key`, etc.) are automatic
 ### Pre-built binary (recommended)
 
 ```bash
-# Linux / macOS — replace VERSION and ARCH as needed
+# Linux / macOS
 curl -sSfL \
   https://github.com/troll-warlord/anyq/releases/latest/download/anyq_linux_amd64.tar.gz \
   | tar -xz anyq && sudo mv anyq /usr/local/bin/
@@ -274,10 +274,10 @@ Natural language request
 - [x] **Semantic diff** — `anyq diff old.yaml new.yaml` — format-agnostic, key-order-insensitive
 - [x] **Schema validation** — `anyq validate --schema k8s.json deploy.yaml` — JSON Schema drafts 4–2020-12
 - [x] **Syntax highlighting** — colorized output in the terminal
+- [x] **Multiple document streams** — `---` separated YAML documents and concatenated JSON (e.g. `go list -json ./...`) via `--slurp`
 - [ ] **In-place editing** (`-i` flag, like `sed -i`) — modify files while preserving YAML comments
 - [ ] **Interactive TUI** — `anyq explore file.yaml` — navigable tree view with path extraction
 - [ ] **XML support** — extend auto-detection and engine to XML
-- [ ] **Multiple document streams** — `---` separated YAML documents
 - [ ] **Shell completion** — `anyq completion bash|zsh|fish|powershell`
 
 ---

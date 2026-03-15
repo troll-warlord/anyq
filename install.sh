@@ -30,7 +30,7 @@ if [ -z "$LATEST" ]; then
 fi
 
 VERSION="${LATEST#v}"
-TARBALL="${BINARY}_${VERSION}_${OS}_${ARCH}.tar.gz"
+TARBALL="${BINARY}_${OS}_${ARCH}.tar.gz"
 URL="https://github.com/${REPO}/releases/download/${LATEST}/${TARBALL}"
 
 echo "Installing ${BINARY} ${LATEST} (${OS}/${ARCH}) to ${INSTALL_DIR} ..."
